@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      (function() {
+        var fallback = {};
+        var restricted = ['fetch', 'location', 'history', 'navigator'];
+        
+        function createHandler(target) {
+          return {
+            get: function(t, prop) {
+              if (prop === 'global' || prop === 'self' || prop === 'window' || prop === 'globalThis') {
+                return window.global;
+              }
+              if (prop in fallback) return fallback[prop];
+              var value = t[prop];
+              if (typeof value === 'function' && t === window) {
+                if (value.prototype && value.prototype.constructor === value) return value;
+                try {
+                  return value.bind(window);
+                } catch (e) {
+                  return value;
+                }
+              }
+              return value;
+            },
+            set: function(t, prop, value) {
+              if (restricted.indexOf(prop) !== -1) {
+                fallback[prop] = value;
+                return true;
+              }
+              try {
+                t[prop] = value;
+              } catch (e) {
+                fallback[prop] = value;
+              }
+              return true;
+            },
+            has: function(t, prop) {
+              return prop in fallback || prop in t;
+            }
+          };
+        }
+
+        var proxy = new Proxy(window, createHandler(window));
+
+        function define(prop) {
+          try {
+            Object.defineProperty(window, prop, {
+              value: proxy,
+              configurable: true,
+              writable: true
+            });
+          } catch (e) {
+            window[prop] = proxy;
+          }
+        }
+
+        define('global');
+        define('globalThis');
+        
+        try {
+          Object.defineProperty(window, 'self', {
+            get: function() { return proxy; },
+            configurable: true
+          });
+        } catch (e) {}
+
+        try {
+          var originalFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            get: function() { return fallback.fetch || originalFetch; },
+            set: function(v) { fallback.fetch = v; },
+            configurable: true
+          });
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
